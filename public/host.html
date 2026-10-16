@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Carrera de Patos · Maestra</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&display=swap">
+<style>
+  /* Proyector: el estanque ocupa toda la pantalla; controles como píldoras flotando encima. */
+  :root {
+    --pond: #0B7285; --deep: #073B4C; --duck: #FFD43B; --duck-edge: #E0A800; --pink: #E8336E; --pink-edge: #B0204F;
+    --ink: #1B2B34; --paper: #FFFFFF; --muted: #5B7078; --gold: #FAB005; --silver: #ADB5BD; --bronze: #D9A066;
+    --display: "Baloo 2", ui-rounded, system-ui, sans-serif; --body: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; margin: 0; overflow: hidden; }
+  body { background: #5AAEE8; color: var(--ink); font: 17px/1.4 var(--body); }
+  h1, h2 { font-family: var(--display); margin: 0; line-height: 1.05; text-wrap: balance; }
+  button { font: inherit; cursor: pointer; }
+  button:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+  #cv { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+  /* Arriba están el letrero y el aviso del cocodrilo: los controles van sobre el pasto de abajo. */
+  .bar { position: fixed; bottom: 16px; left: 16px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; max-width: calc(100% - 290px); }
+  .pill { background: var(--paper); border-radius: 12px; padding: 8px 16px; font: 700 1.05rem var(--display); box-shadow: 0 3px 0 rgba(0,0,0,.12); display: flex; gap: 8px; align-items: center; font-variant-numeric: tabular-nums; }
+  #timer { font-size: 1.3rem; min-width: 5.5em; justify-content: center; }
+  .btn { border: 0; border-radius: 12px; padding: 9px 18px; font: 700 1.05rem var(--display); }
+  .btn.main { background: var(--duck); color: var(--ink); box-shadow: 0 4px 0 var(--duck-edge); }
+  .btn.main:disabled { opacity: .5; cursor: not-allowed; }
+  .btn.pink { background: var(--pink); color: #fff; box-shadow: 0 4px 0 var(--pink-edge); }
+  .btn.gray { background: #E9ECEF; color: var(--ink); box-shadow: 0 4px 0 #ADB5BD; }
+  .btn:active { transform: translateY(2px); }
+
+  .card { background: var(--paper); border-radius: 20px; box-shadow: 0 10px 30px rgba(7,59,76,.25); }
+  #qrCard { position: fixed; right: 32px; top: 50%; transform: translateY(-50%); width: min(320px, 34vw); padding: 18px; display: grid; gap: 10px; justify-items: center; text-align: center; }
+  #qrCard h1 { font-size: 1.8rem; color: var(--pond); }
+  #qr img, #qr canvas { display: block; width: 100%; height: auto; }
+  #url { font: 700 1.05rem ui-monospace, Menlo, monospace; word-break: break-all; }
+  #qrCard .hint { color: var(--muted); font-size: .9rem; margin: 0; }
+
+  #cd { position: fixed; inset: 0; display: grid; place-items: center; font: 800 16rem var(--display); color: #fff; text-shadow: 0 8px 0 var(--pond); pointer-events: none; }
+
+  #top5 { position: fixed; right: 16px; bottom: 16px; padding: 10px 12px; min-width: 230px; display: grid; gap: 4px; list-style: none; margin: 0; }
+  #top5 li { display: grid; grid-template-columns: 1.8em 1.5em 1fr auto; gap: 6px; align-items: center; font-variant-numeric: tabular-nums; }
+  #top5 .pos { font: 800 1rem var(--display); }
+  #top5 .nm { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 9em; }
+  #top5 .d { color: var(--muted); font-size: .9rem; }
+
+  #people { position: fixed; top: 16px; right: 16px; bottom: 90px; width: min(360px, calc(100% - 32px)); padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  #people header { display: flex; align-items: center; justify-content: space-between; }
+  #people h2 { font-size: 1.4rem; }
+  #people ul { list-style: none; margin: 0; padding: 0; overflow-y: auto; display: grid; gap: 4px; }
+  #people li { display: grid; grid-template-columns: 44px 1fr auto; gap: 8px; align-items: center; padding: 2px 6px; border-radius: 10px; }
+  #people li:hover { background: #F1F5F6; }
+  #people li.off { opacity: .45; }
+  #people .nm { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #people .kick { background: #FFE3E3; color: #C92A2A; border: 0; border-radius: 8px; padding: 4px 10px; font-weight: 700; }
+  .x { background: none; border: 0; font-size: 1.4rem; color: var(--muted); }
+
+  #results { position: fixed; inset: 0; background: rgba(7,59,76,.72); display: grid; place-items: center; padding: 24px; overflow-y: auto; }
+  #results .card { padding: 24px 28px; display: grid; gap: 18px; width: min(1100px, 100%); }
+  #results h1 { font-size: 2.6rem; color: var(--pond); text-align: center; }
+  .split { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 28px; align-items: end; }
+  .split.solo { grid-template-columns: 1fr; }
+  .others { display: grid; gap: 8px; align-self: stretch; align-content: start; min-width: 0; }
+  .others h2 { font-size: 1.3rem; color: var(--muted); }
+  @media (max-width: 800px) { .split { grid-template-columns: 1fr; } }
+  #podium { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; justify-content: center; }
+  .step { display: grid; justify-items: center; gap: 4px; }
+  .block { width: 150px; border-radius: 14px 14px 0 0; display: grid; place-items: center; font: 800 2.6rem var(--display); color: var(--ink); }
+  .step .nm { font: 800 1.3rem var(--display); max-width: 170px; text-align: center; overflow-wrap: anywhere; }
+  .step .tm { color: var(--muted); font-variant-numeric: tabular-nums; }
+  #table { width: 100%; list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; max-height: 52vh; overflow-y: auto; }
+  #table li { display: grid; grid-template-columns: 2.2em 44px 1.6em 1fr auto; align-items: center; gap: 8px; padding: 3px 12px; border-radius: 10px; background: #F1F5F6; font-variant-numeric: tabular-nums; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+
+  #nokey { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; background: var(--deep); color: #fff; }
+  #nokey div { max-width: 620px; }
+
+  @media (max-width: 760px) { #qrCard { position: fixed; top: auto; bottom: 16px; right: 16px; transform: none; width: 220px; } }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="/ducks.js"></script>
+</head>
+<body>
+
+<canvas id="cv"></canvas>
+
+<div class="bar" id="bar" hidden>
+  <span class="pill">🦆 <span id="count">0</span> en el estanque</span>
+  <span class="pill" id="timer">⏳ 00:00</span>
+  <button class="btn main" id="start">¡Arrancar carrera!</button>
+  <button class="btn gray" id="end" hidden>Terminar carrera</button>
+  <button class="btn pink" id="peopleBtn">Gestionar participantes</button>
+</div>
+
+<div class="card" id="qrCard" hidden>
+  <h1>¡Únete a la carrera!</h1>
+  <div id="qr"></div>
+  <div>Escanea o entra en<br><span id="url"></span></div>
+  <p class="hint">Esquiva con ▲ ▼ ◀ ▶ · doble ▶ = nitro</p>
+</div>
+
+<div id="cd"></div>
+<ol class="card" id="top5" hidden></ol>
+
+<aside class="card" id="people" hidden>
+  <header><h2>Participantes</h2><button class="x" id="closePeople" aria-label="Cerrar">✕</button></header>
+  <ul id="peopleList"></ul>
+</aside>
+
+<div id="results" hidden>
+  <div class="card">
+    <h1 id="winner">¡Resultados!</h1>
+    <div class="split" id="split">
+      <div id="podium"></div>
+      <div class="others" id="others"><h2>Posiciones</h2><ol id="table"></ol></div>
+    </div>
+    <div class="row">
+      <button class="btn main" id="again">Correr otra vez</button>
+      <button class="btn gray" id="toLobby">Volver a la sala</button>
+    </div>
+  </div>
+</div>
+
+<div id="nokey" hidden><div>
+  <h1>Falta la clave de maestra</h1>
+  <p>Abre el enlace <b>“Pantalla de la maestra”</b> que aparece en la terminal donde corriste <code>node server.js</code>. Termina en <code>/host?key=…</code></p>
+</div></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const key = new URLSearchParams(location.search).get('key');
+let meta = null, phase = null, countdown = 0, elapsed = 0, qrFor = '', camX = null, crocVis = 1;
+const live = new Map();
+const secs = ms => (ms / 1000).toFixed(2) + ' s';
+const clock = ms => { const s = Math.floor(ms / 1000); return `${String(s / 60 | 0).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; };
+const host = (a, body) => fetch(`/host/${a}?key=${encodeURIComponent(key)}`, { method: 'POST', body: JSON.stringify(body || {}) })
+  .then(r => { if (r.status === 403) $('#nokey').hidden = false; });
+
+if (!key) $('#nokey').hidden = false;
+else new EventSource('/events').onmessage = e => onMsg(JSON.parse(e.data));
+
+function onMsg(m) {
+  if (m.t === 'm') {
+    if (!meta) crocVis = m.phase === 'lobby' ? 1 : 0; // con la carrera ya andando, el cocodrilo ya se fue
+    meta = m; phase = m.phase;
+    for (const r of m.roster) if (!live.has(r.pid) || phase !== 'race') live.set(r.pid, { x: r.x, y: r.y, tx: r.x, ty: r.y });
+    render();
+  } else {
+    phase = m.phase; countdown = m.cd; elapsed = m.el;
+    for (const [pid, x, y, nitro, stun] of m.p) {
+      const s = live.get(pid) || { x, y };
+      Object.assign(s, { tx: x, ty: y, nitro, stun }); live.set(pid, s);
+    }
+    renderRace();
+  }
+}
+
+function render() {
+  if (!meta) return;
+  if (qrFor !== meta.joinUrl) {
+    qrFor = meta.joinUrl; $('#url').textContent = meta.joinUrl;
+    $('#qr').replaceChildren();
+    if (window.QRCode) new QRCode($('#qr'), { text: meta.joinUrl, width: 512, height: 512, correctLevel: QRCode.CorrectLevel.M });
+  }
+  $('#bar').hidden = false;
+  $('#count').textContent = meta.roster.length;
+  $('#qrCard').hidden = phase !== 'lobby';
+  $('#start').hidden = phase !== 'lobby';
+  $('#start').disabled = !meta.roster.some(r => r.online);
+  $('#end').hidden = phase !== 'race' && phase !== 'countdown';
+  $('#results').hidden = phase !== 'done';
+  $('#top5').hidden = phase !== 'race';
+  if (phase === 'lobby') $('#timer').textContent = '⏳ 00:00';
+  if (phase === 'done') renderResults();
+  renderPeople(); renderRace();
+}
+
+function renderPeople() {
+  $('#peopleList').replaceChildren(...meta.roster.map(r => {
+    const li = document.createElement('li'); li.className = r.online ? '' : 'off';
+    const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = `${ICONS[r.icon]} ${r.name}`;
+    const b = document.createElement('button'); b.className = 'kick'; b.textContent = 'Sacar';
+    b.setAttribute('aria-label', `Sacar a ${r.name}`); b.onclick = () => host('kick', { pid: r.pid });
+    li.append(duckThumb(r.duck, 40), nm, b); return li;
+  }));
+}
+
+function standings() {
+  return meta.roster.map(r => ({ ...r, x: live.get(r.pid)?.tx ?? r.x }))
+    .sort((a, b) => (a.place || 1e9) - (b.place || 1e9) || b.x - a.x);
+}
+
+function renderRace() {
+  if (!meta) return;
+  $('#cd').textContent = phase === 'countdown' ? (countdown || '¡YA!') : '';
+  if (phase === 'race') $('#timer').textContent = '⏳ ' + clock(elapsed);
+  if (phase !== 'race') return;
+  $('#top5').replaceChildren(...standings().slice(0, 5).map((r, i) => {
+    const li = document.createElement('li');
+    [[`${r.place || i + 1}º`, 'pos'], [ICONS[r.icon], ''], [r.name, 'nm'], [r.place ? secs(r.finish) : `${Math.max(0, Math.round(r.x / 10))} m`, 'd']]
+      .forEach(([t, c]) => { const s = document.createElement('span'); s.className = c; s.textContent = t; li.append(s); });
+    return li;
+  }));
+}
+
+function renderResults() {
+  const st = standings(), colors = ['var(--gold)', 'var(--silver)', 'var(--bronze)'], heights = [150, 105, 80];
+  $('#podium').replaceChildren(...[1, 0, 2].filter(i => st[i]).map(i => {
+    const r = st[i], d = document.createElement('div'); d.className = 'step';
+    const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = `${ICONS[r.icon]} ${r.name}`;
+    const tm = document.createElement('div'); tm.className = 'tm'; tm.textContent = r.place ? secs(r.finish) : `${Math.max(0, Math.round(r.x / 10))} m`;
+    const b = document.createElement('div'); b.className = 'block'; b.style.height = heights[i] + 'px'; b.style.background = colors[i]; b.textContent = i + 1;
+    d.append(duckThumb(r.duck, i ? 90 : 120), nm, tm, b); return d;
+  }));
+  $('#winner').textContent = st[0]?.place ? `¡${st[0].name} ganó la carrera!` : '¡Resultados!';
+  $('#table').replaceChildren(...st.slice(3).map((r, i) => {
+    const li = document.createElement('li'), cells = [`${i + 4}º`, duckThumb(r.duck, 40), ICONS[r.icon], r.name, `${Math.max(0, Math.round(r.x / 10))} m`];
+    cells.forEach(t => { if (typeof t === 'string') { const s = document.createElement('span'); s.textContent = t; li.append(s); } else li.append(t); });
+    return li;
+  }));
+  $('#others').hidden = st.length <= 3;
+  $('#split').classList.toggle('solo', st.length <= 3);
+}
+
+$('#start').onclick = () => host('start');
+$('#again').onclick = () => host('start');
+$('#toLobby').onclick = () => host('lobby');
+$('#end').onclick = () => host('end');
+$('#peopleBtn').onclick = () => { $('#people').hidden = !$('#people').hidden; };
+$('#closePeople').onclick = () => { $('#people').hidden = true; };
+
+// El lago pintado (public/lago) queda fijo de fondo; la carrera corre sobre su franja de agua.
+// Medidas en píxeles de la imagen original: dónde empieza y termina el agua, y dónde están el cocodrilo y el letrero.
+const LAKE = { w: LAKE_W, h: LAKE_H, waterTop: LAKE_WATER[0], waterBottom: LAKE_WATER[1], croc: [1357, 365, 360, 109], banner: [198, 18, 466, 250] };
+const lakeImg = name => { const im = new Image(); im.src = `/lago/${name}?v=${ART_V}`; return im; };
+const LAKE_IMG = { bg: LAKE_BG, croc: lakeImg('cocodrilo.png'), banner: lakeImg('letrero.png') };
+const ready = im => im.complete && im.naturalWidth;
+
+// Letrero colgado: se columpia desde arriba, "respira" y le salen destellos.
+function drawBanner(c, t, sc, ox, oy) {
+  const [bx, by, bw, bh] = LAKE.banner;
+  c.save();
+  c.translate(ox + (bx + bw / 2) * sc, oy + by * sc);
+  c.rotate(Math.sin(t / 1100) * 0.035);
+  const p = 1 + Math.sin(t / 650) * 0.02; c.scale(p, p);
+  c.drawImage(LAKE_IMG.banner, -bw / 2 * sc, 0, bw * sc, bh * sc);
+  for (let i = 0; i < 5; i++) {
+    const a = ((t / 1400 + i / 5) % 1), x = (hash(i + 1) - 0.5) * bw * sc, y = (0.15 + hash(i + 9) * 0.7) * bh * sc;
+    c.globalAlpha = Math.sin(a * Math.PI); c.fillStyle = '#FFF3A3'; star(c, x, y, (6 + 6 * Math.sin(a * Math.PI)) * sc);
+  }
+  c.restore();
+}
+
+// Cocodrilo: nada de un lado a otro (voltea hacia donde va), flota, y cada tanto se sumerge y vuelve a salir.
+// vis: 1 = a la vista (sala), 0 = hundido (en cuanto arranca la carrera se hunde y desaparece).
+function drawCroc(c, t, sc, ox, oy, vis) {
+  if (vis < 0.01) return;
+  const [cx, cy, cw, ch] = LAKE.croc;
+  const dx = -190 + Math.sin(t / 4200) * 215, goingRight = Math.cos(t / 4200) > 0; // siempre dentro del lago
+  const cyc = (t % 11000) / 11000, dive = Math.max(1 - vis, cyc > 0.7 ? Math.sin((cyc - 0.7) / 0.3 * Math.PI) : 0); // 0 arriba .. 1 sumergido
+  const water = oy + (cy + ch) * sc;                       // línea del agua bajo el cocodrilo
+  const x = ox + (cx + cw / 2 + dx) * sc, sink = dive * ch * (vis < 1 ? 1.1 : 0.95) * sc + Math.sin(t / 480) * 3 * sc;
+  c.save();
+  c.beginPath(); c.rect(0, 0, c.canvas.width, water); c.clip();
+  c.translate(x, water + sink); if (goingRight) c.scale(-1, 1);
+  c.rotate(Math.sin(t / 700) * 0.02);
+  c.drawImage(LAKE_IMG.croc, -cw / 2 * sc, -ch * sc, cw * sc, ch * sc);
+  c.restore();
+  // Ondas en la superficie y burbujas cuando está abajo
+  c.strokeStyle = 'rgba(255,255,255,.7)'; c.lineWidth = 2 * sc;
+  for (let i = 0; i < 2; i++) {
+    const r = ((t / 1600 + i / 2) % 1);
+    c.globalAlpha = (1 - r) * vis; ell(c, x, water - 2 * sc, cw * 0.55 * sc * (0.8 + r * 0.6), 9 * sc * (0.8 + r * 0.6)); c.stroke();
+  }
+  c.globalAlpha = 1;
+  if (dive > 0.4) {
+    c.fillStyle = `rgba(255,255,255,${0.85 * vis})`;
+    for (let i = 0; i < 4; i++) { const b = ((t / 700 + i / 4) % 1); ell(c, x + (hash(i) - 0.5) * cw * 0.5 * sc, water - b * 26 * sc, (3 + i) * sc, (3 + i) * sc); c.fill(); }
+  }
+}
+
+function frame(t) {
+  requestAnimationFrame(frame);
+  if (!meta) return;
+  const { c, w, h } = fitCanvas($('#cv'));
+  smooth(live);
+  const lake = ready(LAKE_IMG.bg) && ready(LAKE_IMG.croc) && ready(LAKE_IMG.banner);
+  let k, camY;
+  if (lake) {
+    // La imagen siempre se ve completa (letrero y aviso incluidos). Si la pantalla es más alta que la imagen,
+    // el cielo sigue hacia arriba y el pasto hacia abajo; si es más ancha, el lago sigue a los lados.
+    const sc = Math.min(w / LAKE.w, h / LAKE.h), dw = LAKE.w * sc, dh = LAKE.h * sc, ox = (w - dw) / 2, oy = (h - dh) / 2;
+    c.fillStyle = '#43BFFD'; c.fillRect(0, 0, w, oy + 2);
+    c.fillStyle = '#50A539'; c.fillRect(0, oy + dh - 2, w, h - oy - dh + 2);
+    if (ox > 0) { // a los lados se estira la primera y la última columna de la imagen
+      c.drawImage(LAKE_IMG.bg, 0, 0, 1, LAKE.h, 0, oy, ox + 1, dh);
+      c.drawImage(LAKE_IMG.bg, LAKE.w - 1, 0, 1, LAKE.h, ox + dw - 1, oy, ox + 1, dh);
+    }
+    const top = oy + LAKE.waterTop * sc, bot = oy + LAKE.waterBottom * sc;
+    k = (bot - top) / meta.pondH; camY = -top / k;
+    c.drawImage(LAKE_IMG.bg, ox, oy, dw, dh);
+    if (crocVis < 1 && imgReady(LAKE_RACE)) { c.globalAlpha = 1 - crocVis; c.drawImage(LAKE_RACE, ox, oy, dw, dh); c.globalAlpha = 1; } // al arrancar: lago despejado
+    if (oy > 0) { // difumina la unión con el cielo y el pasto extra
+      const f = Math.min(oy, 40 * sc * 2);
+      let g = c.createLinearGradient(0, oy, 0, oy + f); g.addColorStop(0, '#43BFFD'); g.addColorStop(1, 'rgba(67,191,253,0)');
+      c.fillStyle = g; c.fillRect(0, oy, w, f);
+      g = c.createLinearGradient(0, oy + dh - f, 0, oy + dh); g.addColorStop(0, 'rgba(80,165,57,0)'); g.addColorStop(1, '#50A539');
+      c.fillStyle = g; c.fillRect(0, oy + dh - f, w, f);
+    }
+    drawBanner(c, t, sc, ox, oy);
+    crocVis += ((phase === 'lobby' ? 1 : 0) - crocVis) * 0.025; // se hunde en ~2 s al arrancar
+    drawCroc(c, t, sc, ox, oy, crocVis);
+  } else {
+    k = h / (meta.pondH + BANK_TOP + BANK_BOT); camY = -BANK_TOP;
+  }
+  const viewW = w / k;
+  const ducks = meta.roster.map(r => {
+    const s = live.get(r.pid) || { x: r.x, y: r.y };
+    return { pid: r.pid, x: s.x, y: s.y, duck: r.duck, icon: r.icon, name: r.name, moving: s.moving, look: s.look, nitro: s.nitro, stun: s.stun, offline: !r.online && !r.place, alpha: r.online || r.place ? 1 : 0.5 };
+  });
+  const leader = Math.max(-40, ...ducks.map(d => d.x)), minX = -viewW * 0.45;
+  const target = phase === 'lobby' ? minX : Math.max(minX, Math.min(meta.trackLen + 250 - viewW, leader - viewW * 0.6));
+  camX = camX == null ? target : camX + (target - camX) * 0.08;
+  drawPond(c, { w, h, camX, camY, k, pondH: meta.pondH, trackLen: meta.trackLen, obstacles: meta.obstacles, ducks, t, arrows: true, backdrop: lake });
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

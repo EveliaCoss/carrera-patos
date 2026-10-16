@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Carrera de Patos</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&display=swap">
+<style>
+  /* Estanque: azul-verde de agua, amarillo pato como acción; el juego ocupa toda la pantalla en partida. */
+  :root {
+    --pond: #0B7285; --pond-soft: #E3FAFC; --duck: #FFD43B; --duck-edge: #E0A800;
+    --ink: #1B2B34; --paper: #F1FAF8; --muted: #5B7078; --alert: #C92A2A;
+    --display: "Baloo 2", ui-rounded, system-ui, sans-serif; --body: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--paper); color: var(--ink); font: 16px/1.45 var(--body); -webkit-tap-highlight-color: transparent; }
+  h1 { font: 800 clamp(2rem, 7vw, 3rem)/1 var(--display); color: var(--pond); margin: 0; text-wrap: balance; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  button:focus-visible, input:focus-visible { outline: 3px solid var(--pond); outline-offset: 2px; }
+
+  #join { max-width: 760px; margin: 0 auto; padding: 20px 16px 40px; display: grid; gap: 18px; }
+  #join p.sub { margin: 4px 0 0; color: var(--muted); }
+  label, .lbl { font: 700 1.05rem var(--display); margin: 0; display: flex; justify-content: space-between; gap: 8px; }
+  .lbl span { color: var(--pond); }
+  #name { width: 100%; font: 600 1.2rem var(--body); padding: 12px 14px; border: 2px solid #C5DEE2; border-radius: 12px; background: #fff; }
+  .grid { display: grid; gap: 8px; }
+  #duckGrid { grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); }
+  #iconGrid { grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)); }
+  .pick { background: #fff; border: 2px solid transparent; border-radius: 14px; padding: 4px 2px 6px; display: grid; justify-items: center; gap: 0; box-shadow: 0 1px 0 #C5DEE2; }
+  .pick span { font-size: .78rem; color: var(--muted); }
+  .pick[aria-checked="true"] { border-color: var(--pond); background: var(--pond-soft); }
+  .pick[aria-checked="true"] span { color: var(--pond); font-weight: 700; }
+  #iconGrid .pick { font-size: 1.6rem; padding: 6px 0; }
+  .go { background: var(--duck); border: 0; border-radius: 999px; padding: 14px 24px; font: 800 1.35rem var(--display); box-shadow: 0 5px 0 var(--duck-edge); }
+  .go:active { transform: translateY(3px); box-shadow: 0 2px 0 var(--duck-edge); }
+  .err { color: var(--alert); font-weight: 600; margin: 0; }
+
+  #game { height: 100%; display: flex; flex-direction: column; user-select: none; -webkit-user-select: none; }
+  #game header { display: flex; align-items: center; gap: 10px; padding: 6px 16px; background: var(--pond); color: #fff; }
+  #game header b { font: 800 1.2rem var(--display); }
+  #status { margin-left: auto; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .stage { position: relative; flex: 1; min-height: 200px; }
+  #cv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #overlay { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 16px; pointer-events: none; font: 800 1.5rem/1.15 var(--display); color: var(--ink); text-shadow: 0 2px 0 #fff; }
+  #overlay.big { font-size: clamp(5rem, 22vw, 9rem); color: var(--pond); }
+  #overlay > div { background: rgba(255,255,255,.88); border-radius: 18px; padding: 12px 18px; box-shadow: 0 6px 20px rgba(7,59,76,.2); max-width: 420px; }
+  #overlay.big > div { background: none; box-shadow: none; }
+  #overlay small { display: block; font: 600 1rem var(--body); color: var(--muted); margin-top: 6px; }
+  .nitro { display: flex; align-items: center; gap: 10px; padding: 8px 16px; background: #fff; border-top: 1px solid #D5E7EA; }
+  .nitro b { font: 800 .95rem var(--display); letter-spacing: .06em; }
+  .bar { flex: 1; height: 12px; border-radius: 6px; background: #E6EEF0; overflow: hidden; }
+  #nitroBar { display: block; height: 100%; width: 0; background: #FF922B; border-radius: 6px; }
+  #nitroBar.ready { background: #2B8A3E; }
+  #nitroBar.on { background: #FF6B00; animation: pulse .3s infinite alternate; }
+  .nitro small { color: var(--muted); }
+  @keyframes pulse { to { opacity: .55; } }
+  .pad { display: flex; justify-content: space-between; gap: 16px; padding: 10px 16px calc(12px + env(safe-area-inset-bottom, 0px)); background: #fff; }
+  .pad > div { display: grid; grid-template-columns: repeat(2, minmax(64px, 96px)); gap: 10px; }
+  .pad button { height: 76px; border: 0; border-radius: 18px; background: var(--pond-soft); font: 800 2rem var(--display); color: var(--pond); touch-action: none; box-shadow: 0 4px 0 #B6E3E8; }
+  .pad button.down { transform: translateY(3px); box-shadow: 0 1px 0 #B6E3E8; background: #C5F6FA; }
+  #bFwd { background: var(--duck); color: var(--ink); box-shadow: 0 4px 0 var(--duck-edge); }
+  .nitro small.ready { color: #2B8A3E; font-weight: 700; }
+  @media (prefers-reduced-motion: reduce) { #nitroBar.on { animation: none; } }
+</style>
+<script src="/ducks.js"></script>
+</head>
+<body>
+
+<main id="join">
+  <div>
+    <h1>Carrera de Patos</h1>
+    <p class="sub">Elige tu pato, ponle nombre y espera en la línea de salida.</p>
+  </div>
+  <form id="joinForm" class="grid" style="gap:18px">
+    <div class="grid">
+      <label for="name">Tu nombre</label>
+      <input id="name" maxlength="16" autocomplete="off" placeholder="Ej. Sofía" required>
+    </div>
+    <div class="grid">
+      <p class="lbl">Elige tu pato <span id="duckName"></span></p>
+      <div id="duckGrid" class="grid" role="radiogroup" aria-label="Pato"></div>
+    </div>
+    <div class="grid">
+      <p class="lbl">Elige tu ícono</p>
+      <div id="iconGrid" class="grid" role="radiogroup" aria-label="Ícono"></div>
+    </div>
+    <button class="go" id="joinBtn">Entrar a la carrera</button>
+    <p id="joinErr" class="err" hidden></p>
+  </form>
+</main>
+
+<main id="game" hidden>
+  <header><span id="meDuck"></span><b id="meName"></b><span id="status"></span></header>
+  <div class="stage"><canvas id="cv"></canvas><div id="overlay"></div></div>
+  <div class="nitro"><b>NITRO</b><div class="bar"><i id="nitroBar"></i></div><small id="nitroTxt">Cargando…</small></div>
+  <div class="pad">
+    <div>
+      <button id="bUp" aria-label="Arriba">▲</button>
+      <button id="bDown" aria-label="Abajo">▼</button>
+    </div>
+    <div>
+      <button id="bBack" aria-label="Atrás">◀</button>
+      <button id="bFwd" aria-label="Adelante (doble toque: nitro)">▶</button>
+    </div>
+  </div>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const store = { get: k => { try { return sessionStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { sessionStorage.setItem(k, v); } catch {} } };
+let token = store.get('duckToken'), myPid = +store.get('duckPid') || 0;
+const pick = { duck: Math.random() * DUCKS.length | 0, icon: Math.random() * ICONS.length | 0 };
+let es = null, meta = null, phase = 'lobby', countdown = 0, elapsed = 0, raceFade = 0;
+const live = new Map(); // pid -> {x, y, tx, ty, nitro, stun, cd}
+
+// ---------- unirse ----------
+function radio(container, items, key) {
+  items.forEach((el, i) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'pick'; b.setAttribute('role', 'radio');
+    b.append(...el); b.onclick = () => { pick[key] = i; markPicks(); };
+    container.append(b);
+  });
+}
+radio($('#duckGrid'), DUCKS.map((d, i) => { const s = document.createElement('span'); s.textContent = d[0]; return [duckThumb(i, 84), s]; }), 'duck');
+radio($('#iconGrid'), ICONS.map(ic => [ic]), 'icon');
+DUCKS.forEach((d, i) => $('#duckGrid').children[i].setAttribute('aria-label', d[0]));
+function markPicks() {
+  [...$('#duckGrid').children].forEach((b, i) => b.setAttribute('aria-checked', i === pick.duck));
+  [...$('#iconGrid').children].forEach((b, i) => b.setAttribute('aria-checked', i === pick.icon));
+  $('#duckName').textContent = ICONS[pick.icon] + ' ' + DUCKS[pick.duck][0];
+}
+markPicks();
+
+$('#joinForm').onsubmit = async e => {
+  e.preventDefault();
+  const err = $('#joinErr'); err.hidden = true; $('#joinBtn').disabled = true;
+  try {
+    const r = await fetch('/join', { method: 'POST', body: JSON.stringify({ name: $('#name').value, ...pick }) });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'No se pudo entrar.');
+    token = j.token; myPid = j.pid; store.set('duckToken', token); store.set('duckPid', myPid);
+    enter();
+  } catch (x) {
+    err.textContent = x.message === 'Failed to fetch' ? 'No hay conexión con la carrera. Revisa que estés en la misma Wi‑Fi.' : x.message;
+    err.hidden = false;
+  } finally { $('#joinBtn').disabled = false; }
+};
+
+function backToJoin(msg) {
+  es?.close(); es = null; token = null; store.set('duckToken', '');
+  $('#game').hidden = true; $('#join').hidden = false;
+  if (msg) { $('#joinErr').textContent = msg; $('#joinErr').hidden = false; }
+}
+
+function enter() {
+  $('#join').hidden = true; $('#game').hidden = false;
+  es = new EventSource('/events?token=' + encodeURIComponent(token));
+  es.onmessage = e => onMsg(JSON.parse(e.data));
+}
+
+function onMsg(m) {
+  if (m.t === 'm') {
+    meta = m; phase = m.phase;
+    const me = m.roster.find(r => r.pid === myPid);
+    if (!me) return backToJoin('Saliste de la carrera. Vuelve a unirte.');
+    $('#meName').textContent = me.name;
+    $('#meDuck').replaceChildren(duckThumb(me.duck, 36));
+    for (const r of m.roster) if (!live.has(r.pid) || phase === 'lobby' || phase === 'countdown') live.set(r.pid, { x: r.x, y: r.y, tx: r.x, ty: r.y });
+  } else if (m.t === 's') {
+    phase = m.phase; countdown = m.cd; elapsed = m.el;
+    for (const [pid, x, y, nitro, stun, cd] of m.p) {
+      const s = live.get(pid) || { x, y };
+      Object.assign(s, { tx: x, ty: y, nitro, stun, cd }); live.set(pid, s);
+    }
+  }
+  updateHud();
+}
+
+// ---------- HUD ----------
+let lastOverlay = '';
+function setOverlay(html, big) {
+  if (html === lastOverlay) return;
+  lastOverlay = html; const o = $('#overlay'); o.innerHTML = html ? `<div>${html}</div>` : ''; o.classList.toggle('big', !!big);
+}
+const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const secs = ms => (ms / 1000).toFixed(2) + ' s';
+function updateHud() {
+  if (!meta) return;
+  const me = meta.roster.find(r => r.pid === myPid); if (!me) return;
+  const n = meta.roster.length;
+  if (phase === 'lobby') {
+    setOverlay(`¡Listo, ${esc(me.name)}!<small>Ya estás en la línea de salida · ${n} ${n === 1 ? 'pato' : 'patos'} en el estanque<br>Esquiva con ▲ ▼ ◀ ▶ · doble ▶ = nitro</small>`);
+    $('#status').textContent = 'En la sala';
+  } else if (phase === 'countdown') {
+    setOverlay(String(countdown || '¡YA!'), true); $('#status').textContent = 'Preparados…';
+  } else {
+    const ahead = meta.roster.filter(r => r.place || (live.get(r.pid)?.tx ?? 0) > (live.get(myPid)?.tx ?? 0)).length;
+    if (me.place) setOverlay(`¡Llegaste #${me.place}!<small>${secs(me.finish)}</small>`);
+    else if (phase === 'done') {
+      const pos = 1 + meta.roster.filter(r => r.pid !== myPid && (r.place || (!me.place && (live.get(r.pid)?.tx ?? r.x) > (live.get(myPid)?.tx ?? me.x)))).length;
+      setOverlay(`Quedaste #${pos}<small>${pos <= 3 ? '¡Estás en el podio! 🏆' : 'Mira el podio en la pantalla'}</small>`);
+    }
+    else setOverlay('');
+    $('#status').textContent = me.place ? `#${me.place}` : phase === 'race' ? `${ahead + 1}º · ${secs(elapsed)}` : 'Terminó la carrera';
+  }
+  const s = live.get(myPid), bar = $('#nitroBar');
+  const pct = s?.nitro ? 100 : s?.cd ? 100 * (1 - s.cd / meta.nitroTotal) : 100;
+  bar.style.width = pct + '%';
+  bar.className = s?.nitro ? 'on' : pct >= 100 ? 'ready' : '';
+  const txt = $('#nitroTxt');
+  txt.textContent = s?.nitro ? '¡NITRO!' : pct >= 100 ? '¡Listo! Doble ▶' : 'Cargando…';
+  txt.className = pct >= 100 && !s?.nitro ? 'ready' : '';
+}
+
+// ---------- controles ----------
+const held = { l: false, r: false, u: false, d: false };
+let dx = 0, dy = 0, lastFwd = 0;
+function send(x) { if (token) fetch('/input', { method: 'POST', body: JSON.stringify({ token, ...x }), keepalive: true }).catch(() => {}); }
+function setHeld(k, v) {
+  if (held[k] === v) return;
+  held[k] = v;
+  if (k === 'r' && v) { const now = performance.now(); if (now - lastFwd < 320) send({ nitro: 1 }); lastFwd = now; }
+  const nx = (held.r ? 1 : 0) - (held.l ? 1 : 0), ny = (held.d ? 1 : 0) - (held.u ? 1 : 0);
+  if (nx !== dx || ny !== dy) { dx = nx; dy = ny; send({ dx, dy }); }
+}
+const KEYS = { ArrowRight: 'r', KeyD: 'r', ArrowLeft: 'l', KeyA: 'l', ArrowUp: 'u', KeyW: 'u', ArrowDown: 'd', KeyS: 'd' };
+addEventListener('keydown', e => {
+  if ($('#game').hidden || !KEYS[e.code]) return;
+  e.preventDefault(); if (!e.repeat) setHeld(KEYS[e.code], true);
+});
+addEventListener('keyup', e => { if (KEYS[e.code]) setHeld(KEYS[e.code], false); });
+addEventListener('blur', () => Object.keys(held).forEach(k => setHeld(k, false)));
+function holdButton(b, k) {
+  const up = () => { b.classList.remove('down'); setHeld(k, false); };
+  b.addEventListener('pointerdown', e => { e.preventDefault(); b.setPointerCapture(e.pointerId); b.classList.add('down'); setHeld(k, true); });
+  b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up); b.addEventListener('lostpointercapture', up);
+}
+holdButton($('#bFwd'), 'r'); holdButton($('#bBack'), 'l'); holdButton($('#bUp'), 'u'); holdButton($('#bDown'), 'd');
+$('#game').addEventListener('contextmenu', e => e.preventDefault());
+
+// ---------- dibujo ----------
+function frame(t) {
+  requestAnimationFrame(frame);
+  if (!meta || $('#game').hidden) return;
+  const { c, w, h } = fitCanvas($('#cv'));
+  smooth(live);
+  const ducks = meta.roster.map(r => {
+    const s = live.get(r.pid) || { x: r.x, y: r.y }, me = r.pid === myPid;
+    return { pid: r.pid, x: s.x, y: s.y, duck: r.duck, icon: r.icon, name: r.name, me, alpha: me ? 1 : 0.55, moving: s.moving, look: s.look, nitro: s.nitro, stun: s.stun, offline: !r.online };
+  });
+  const mine = ducks.find(d => d.me) || { x: 0, y: 0 };
+  // La cámara sigue a tu pato: todo el alto si cabe, si no, se desliza con él.
+  const top = 30, worldH = meta.pondH + BANK_TOP + BANK_BOT, k = Math.min((h - top) / Math.min(worldH, 560), w / 520);
+  const viewH = (h - top) / k, camY = Math.max(-BANK_TOP, Math.min(meta.pondH + BANK_BOT - viewH, mine.y - viewH / 2)) - top / k;
+  const camX = mine.x - (w / k) * 0.3;
+  raceFade += ((phase === 'lobby' ? 0 : 1) - raceFade) * 0.03; // al arrancar, el lago se despeja
+  const lake = drawLakeTiles(c, { w, h, camX, camY, k, pondH: meta.pondH, race: raceFade });
+  drawPond(c, { w, h, camX, camY, k, pondH: meta.pondH, trackLen: meta.trackLen, obstacles: meta.obstacles, ducks, t, backdrop: lake });
+  c.fillStyle = 'rgba(241,250,248,.92)'; c.fillRect(0, 0, w, top);
+  drawProgress(c, 16, top / 2, w - 52, ducks, meta.trackLen);
+}
+requestAnimationFrame(frame);
+
+// Volver a entrar si recargan la página.
+if (token) fetch('/me?token=' + encodeURIComponent(token)).then(r => r.ok ? enter() : backToJoin()).catch(() => {});
+</script>
+</body>
+</html>
