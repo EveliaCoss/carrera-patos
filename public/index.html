@@ -24,6 +24,8 @@
   #join p.sub { margin: 4px 0 0; color: var(--muted); }
   label, .lbl { font: 700 1.05rem var(--display); margin: 0; display: flex; justify-content: space-between; gap: 8px; }
   .lbl span { color: var(--pond); }
+  #code { width: 100%; font: 800 2rem var(--display); letter-spacing: .2em; text-transform: uppercase; padding: 8px 14px; border: 2px solid #C5DEE2; border-radius: 12px; background: #fff; }
+  .link { background: none; border: 0; padding: 0; color: var(--pond); text-decoration: underline; font-weight: 600; }
   #name { width: 100%; font: 600 1.2rem var(--body); padding: 12px 14px; border: 2px solid #C5DEE2; border-radius: 12px; background: #fff; }
   .grid { display: grid; gap: 8px; }
   #duckGrid { grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); }
@@ -64,16 +66,25 @@
   .nitro small.ready { color: #2B8A3E; font-weight: 700; }
   @media (prefers-reduced-motion: reduce) { #nitroBar.on { animation: none; } }
 </style>
-<script src="/ducks.js"></script>
+<script src="ducks.js"></script>
 </head>
 <body>
 
 <main id="join">
   <div>
     <h1>Carrera de Patos</h1>
-    <p class="sub">Elige tu pato, ponle nombre y espera en la línea de salida.</p>
+    <p class="sub">Escribe el código de la sala que ves en la pantalla, elige tu pato y espera en la línea de salida.</p>
   </div>
-  <form id="joinForm" class="grid" style="gap:18px">
+  <form id="roomForm" class="grid" style="gap:12px">
+    <div class="grid" id="roomStep">
+      <label for="code">Código de sala</label>
+      <input id="code" maxlength="4" autocomplete="off" autocapitalize="characters" placeholder="Ej. K7PQ" inputmode="text">
+      <button class="go" id="roomBtn">Continuar</button>
+      <p id="roomErr" class="err" hidden></p>
+    </div>
+  </form>
+  <form id="joinForm" class="grid" style="gap:18px" hidden>
+    <p class="sub">Sala <b id="roomLabel"></b> · <button type="button" class="link" id="changeRoom">cambiar</button></p>
     <div class="grid">
       <label for="name">Tu nombre</label>
       <input id="name" maxlength="16" autocomplete="off" placeholder="Ej. Sofía" required>
@@ -107,12 +118,13 @@
   </div>
 </main>
 
-<script>
+<script type="module">
+import { configured, auth, onAuthStateChanged, signInAnonymously, ref, db, get, set, update, onValue, onDisconnect,
+  room, cleanCode, normalizeMeta, normalizeState } from './net.js';
 const $ = s => document.querySelector(s);
 const store = { get: k => { try { return sessionStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { sessionStorage.setItem(k, v); } catch {} } };
-let token = store.get('duckToken'), myPid = +store.get('duckPid') || 0;
 const pick = { duck: Math.random() * DUCKS.length | 0, icon: Math.random() * ICONS.length | 0 };
-let es = null, meta = null, phase = 'lobby', countdown = 0, elapsed = 0, raceFade = 0;
+let uid = null, code = null, myPid = 0, meta = null, phase = 'lobby', countdown = 0, elapsed = 0, raceFade = 0, unsubs = [];
 const live = new Map(); // pid -> {x, y, tx, ty, nitro, stun, cd}
 
 // ---------- unirse ----------
@@ -134,40 +146,70 @@ function markPicks() {
 }
 markPicks();
 
+function showError(el, msg) { el.textContent = msg; el.hidden = !msg; }
+function show(step) { for (const id of ['roomStep', 'joinForm']) $('#' + id).hidden = id !== step; }
+
+// Paso 1: código de sala (llega solo si entraron por el QR: ?sala=ABCD)
+$('#code').oninput = e => { e.target.value = cleanCode(e.target.value); };
+$('#roomForm').onsubmit = e => { e.preventDefault(); chooseRoom(cleanCode($('#code').value)); };
+async function chooseRoom(c) {
+  showError($('#roomErr'), '');
+  if (c.length !== 4) return showError($('#roomErr'), 'El código tiene 4 letras o números.');
+  $('#roomBtn').disabled = true;
+  try {
+    const owner = (await get(room(c, 'owner'))).val();
+    if (!owner) return showError($('#roomErr'), `No existe la sala ${c}. Revisa el código en la pantalla.`);
+    if ((await get(room(c, `banned/${uid}`))).val()) return showError($('#roomErr'), 'No puedes entrar a esta sala.');
+    code = c; store.set('duckRoom', c);
+    $('#roomLabel').textContent = c;
+    if ((await get(room(c, `players/${uid}`))).val()) return enter(); // ya estaba dentro (recargó la página)
+    show('joinForm'); $('#name').focus();
+  } catch { showError($('#roomErr'), 'No hay conexión. Revisa tu internet e intenta de nuevo.'); }
+  finally { $('#roomBtn').disabled = false; }
+}
+$('#changeRoom').onclick = () => { show('roomStep'); };
+
+// Paso 2: nombre, pato e ícono. Solo puedes escribir tu propio pato (lo exigen las reglas de Firebase).
 $('#joinForm').onsubmit = async e => {
   e.preventDefault();
-  const err = $('#joinErr'); err.hidden = true; $('#joinBtn').disabled = true;
+  const err = $('#joinErr'); showError(err, ''); $('#joinBtn').disabled = true;
+  const name = $('#name').value.replace(/[\u0000-\u001f\u007f-\u009f​-‏‪-‮]/g, '').trim().slice(0, 16);
   try {
-    const r = await fetch('/join', { method: 'POST', body: JSON.stringify({ name: $('#name').value, ...pick }) });
-    const j = await r.json();
-    if (!r.ok) throw new Error(j.error || 'No se pudo entrar.');
-    token = j.token; myPid = j.pid; store.set('duckToken', token); store.set('duckPid', myPid);
+    if (!name) throw new Error('Escribe tu nombre para entrar.');
+    await set(room(code, `players/${uid}`), { name, duck: pick.duck, icon: pick.icon, online: true });
     enter();
   } catch (x) {
-    err.textContent = x.message === 'Failed to fetch' ? 'No hay conexión con la carrera. Revisa que estés en la misma Wi‑Fi.' : x.message;
-    err.hidden = false;
+    showError(err, x.message?.startsWith('Escribe') ? x.message : x.code === 'PERMISSION_DENIED' ? 'No puedes entrar a esta sala.' : 'No se pudo entrar. Revisa tu internet.');
   } finally { $('#joinBtn').disabled = false; }
 };
 
 function backToJoin(msg) {
-  es?.close(); es = null; token = null; store.set('duckToken', '');
-  $('#game').hidden = true; $('#join').hidden = false;
-  if (msg) { $('#joinErr').textContent = msg; $('#joinErr').hidden = false; }
+  unsubs.forEach(u => u()); unsubs = []; meta = null; myPid = 0;
+  $('#game').hidden = true; $('#join').hidden = false; show('roomStep');
+  showError($('#roomErr'), msg || '');
 }
 
 function enter() {
   $('#join').hidden = true; $('#game').hidden = false;
-  es = new EventSource('/events?token=' + encodeURIComponent(token));
-  es.onmessage = e => onMsg(JSON.parse(e.data));
+  const me = room(code, `players/${uid}`);
+  // Conectado/desconectado: Firebase marca "online: false" solo si se cierra la pestaña o se cae la red.
+  unsubs.push(onValue(ref(db, '.info/connected'), s => {
+    if (!s.val()) return;
+    onDisconnect(room(code, `players/${uid}/online`)).set(false);
+    update(me, { online: true }).catch(() => {});
+  }));
+  let existed = false;
+  unsubs.push(onValue(me, s => { if (s.exists()) existed = true; else if (existed) backToJoin('La maestra te sacó de la carrera.'); }));
+  unsubs.push(onValue(room(code, 'meta'), s => { const m = normalizeMeta(s.val()); if (m) onMsg(m); }));
+  unsubs.push(onValue(room(code, 'state'), s => { const m = normalizeState(s.val()); if (m) onMsg(m); }));
 }
 
 function onMsg(m) {
   if (m.t === 'm') {
     meta = m; phase = m.phase;
-    const me = m.roster.find(r => r.pid === myPid);
-    if (!me) return backToJoin('Saliste de la carrera. Vuelve a unirte.');
-    $('#meName').textContent = me.name;
-    $('#meDuck').replaceChildren(duckThumb(me.duck, 36));
+    const me = m.roster.find(r => r.uid === uid);
+    myPid = me?.pid || 0;
+    if (me) { $('#meName').textContent = me.name; if ($('#meDuck').dataset.duck !== String(me.duck)) { $('#meDuck').dataset.duck = me.duck; $('#meDuck').replaceChildren(duckThumb(me.duck, 36)); } }
     for (const r of m.roster) if (!live.has(r.pid) || phase === 'lobby' || phase === 'countdown') live.set(r.pid, { x: r.x, y: r.y, tx: r.x, ty: r.y });
   } else if (m.t === 's') {
     phase = m.phase; countdown = m.cd; elapsed = m.el;
@@ -177,6 +219,19 @@ function onMsg(m) {
     }
   }
   updateHud();
+}
+
+// Arranque: sesión anónima (no pide cuenta). Vuelve solo a la sala si recargaron la página.
+if (!configured) showError($('#roomErr'), 'Este juego todavía no está conectado a Firebase.');
+else {
+  onAuthStateChanged(auth, user => {
+    if (!user) { signInAnonymously(auth).catch(() => showError($('#roomErr'), 'No hay conexión. Revisa tu internet.')); return; }
+    if (uid) return;
+    uid = user.uid;
+    const fromQr = cleanCode(new URLSearchParams(location.search).get('sala')), saved = store.get('duckRoom');
+    const c = fromQr || saved;
+    if (c) { $('#code').value = c; chooseRoom(c); }
+  });
 }
 
 // ---------- HUD ----------
@@ -189,7 +244,8 @@ const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&
 const secs = ms => (ms / 1000).toFixed(2) + ' s';
 function updateHud() {
   if (!meta) return;
-  const me = meta.roster.find(r => r.pid === myPid); if (!me) return;
+  const me = meta.roster.find(r => r.pid === myPid);
+  if (!me) { setOverlay('Entrando a la sala…'); return; }
   const n = meta.roster.length;
   if (phase === 'lobby') {
     setOverlay(`¡Listo, ${esc(me.name)}!<small>Ya estás en la línea de salida · ${n} ${n === 1 ? 'pato' : 'patos'} en el estanque<br>Esquiva con ▲ ▼ ◀ ▶ · doble ▶ = nitro</small>`);
@@ -197,7 +253,7 @@ function updateHud() {
   } else if (phase === 'countdown') {
     setOverlay(String(countdown || '¡YA!'), true); $('#status').textContent = 'Preparados…';
   } else {
-    const ahead = meta.roster.filter(r => r.place || (live.get(r.pid)?.tx ?? 0) > (live.get(myPid)?.tx ?? 0)).length;
+    const ahead = meta.roster.filter(r => r.pid !== myPid && (r.place || (live.get(r.pid)?.tx ?? 0) > (live.get(myPid)?.tx ?? 0))).length;
     if (me.place) setOverlay(`¡Llegaste #${me.place}!<small>${secs(me.finish)}</small>`);
     else if (phase === 'done') {
       const pos = 1 + meta.roster.filter(r => r.pid !== myPid && (r.place || (!me.place && (live.get(r.pid)?.tx ?? r.x) > (live.get(myPid)?.tx ?? me.x)))).length;
@@ -217,12 +273,13 @@ function updateHud() {
 
 // ---------- controles ----------
 const held = { l: false, r: false, u: false, d: false };
-let dx = 0, dy = 0, lastFwd = 0;
-function send(x) { if (token) fetch('/input', { method: 'POST', body: JSON.stringify({ token, ...x }), keepalive: true }).catch(() => {}); }
+let dx = 0, dy = 0, lastFwd = 0, nitroCount = 0;
+// Solo escribes tus propios controles (inputs/<tu uid>); la pantalla de la maestra mueve los patos.
+function send(x) { if (uid && code && !$('#game').hidden) update(room(code, `inputs/${uid}`), x).catch(() => {}); }
 function setHeld(k, v) {
   if (held[k] === v) return;
   held[k] = v;
-  if (k === 'r' && v) { const now = performance.now(); if (now - lastFwd < 320) send({ nitro: 1 }); lastFwd = now; }
+  if (k === 'r' && v) { const now = performance.now(); if (now - lastFwd < 320) send({ n: ++nitroCount }); lastFwd = now; }
   const nx = (held.r ? 1 : 0) - (held.l ? 1 : 0), ny = (held.d ? 1 : 0) - (held.u ? 1 : 0);
   if (nx !== dx || ny !== dy) { dx = nx; dy = ny; send({ dx, dy }); }
 }
@@ -264,8 +321,6 @@ function frame(t) {
 }
 requestAnimationFrame(frame);
 
-// Volver a entrar si recargan la página.
-if (token) fetch('/me?token=' + encodeURIComponent(token)).then(r => r.ok ? enter() : backToJoin()).catch(() => {});
 </script>
 </body>
 </html>

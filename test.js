@@ -1,6 +1,6 @@
 // node test.js — revisa que la física de la carrera se comporte como se espera.
 const assert = require('assert');
-const { step, fresh, makeTrack, T } = require('./server.js');
+const { step, fresh, makeTrack, T } = require('./public/game.js');
 const dt = 1 / T.tickHz, H = 480;
 const duck = (dx, dy = 0, y = 240) => Object.assign(fresh({}), { dx, dy, x: 0, y });
 const run = (p, obs, secs, onTick = () => {}) => {

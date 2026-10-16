@@ -45,7 +45,7 @@ const ICONS = ['⭐', '🔥', '⚡', '🍀', '🌈', '🎯', '🚀', '🎸', '�
 // Versión de las imágenes: al cambiarla, los navegadores no pueden reusar copias viejas. herramientas/recortar_patos.py la actualiza.
 const ART_V = '20261016171757';
 const DUCK_IMG = typeof Image === 'undefined' ? [] : DUCKS.map((_, i) => {
-  const im = new Image(); im.src = `/ducks/${String(i).padStart(2, '0')}.png?v=${ART_V}`; return im;
+  const im = new Image(); im.src = `ducks/${String(i).padStart(2, '0')}.png?v=${ART_V}`; return im;
 });
 
 function ell(c, x, y, rx, ry, rot = 0) { c.beginPath(); c.ellipse(x, y, Math.max(rx, 0), Math.max(ry, 0), rot, 0, Math.PI * 2); }
@@ -268,7 +268,7 @@ function drawPond(c, V) {
 
 // Lago pintado (public/lago/fondo.jpg): medidas en píxeles de la imagen y franja de agua.
 const LAKE_W = 1800, LAKE_H = 874, LAKE_WATER = [262, 738];
-const lakeImage = name => typeof Image === 'undefined' ? null : Object.assign(new Image(), { src: `/lago/${name}?v=${ART_V}` });
+const lakeImage = name => typeof Image === 'undefined' ? null : Object.assign(new Image(), { src: `lago/${name}?v=${ART_V}` });
 const LAKE_BG = lakeImage('fondo.jpg');        // sala: lago con flores y nenúfares
 const LAKE_RACE = lakeImage('carrera.jpg');    // carrera: lago despejado (misma franja de agua)
 const imgReady = im => im && im.complete && im.naturalWidth;

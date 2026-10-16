@@ -75,13 +75,23 @@
   #table li { display: grid; grid-template-columns: 2.2em 44px 1.6em 1fr auto; align-items: center; gap: 8px; padding: 3px 12px; border-radius: 10px; background: #F1F5F6; font-variant-numeric: tabular-nums; }
   .row { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
 
-  #nokey { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; background: var(--deep); color: #fff; }
-  #nokey div { max-width: 620px; }
+  #setup { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; background: var(--deep); color: #fff; }
+  #setup div { max-width: 620px; }
+  #login { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; background: rgba(7,59,76,.55); }
+  #loginForm { width: min(380px, 100%); padding: 24px; display: grid; gap: 8px; }
+  #loginForm h1 { color: var(--pond); font-size: 2rem; }
+  #loginForm label { font-weight: 700; margin-top: 6px; }
+  #loginForm input { font: inherit; padding: 10px 12px; border: 2px solid #C5DEE2; border-radius: 10px; }
+  #loginForm .btn { margin-top: 10px; }
+  .err { color: #C92A2A; font-weight: 600; margin: 0; }
+  #roomCode { font: 800 2.6rem/1 var(--display); letter-spacing: .12em; color: var(--ink); }
+  #logout { background: none; border: 0; color: var(--muted); text-decoration: underline; font-size: .85rem; }
 
   @media (max-width: 760px) { #qrCard { position: fixed; top: auto; bottom: 16px; right: 16px; transform: none; width: 220px; } }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="/ducks.js"></script>
+<script src="ducks.js"></script>
+<script src="game.js"></script>
 </head>
 <body>
 
@@ -99,6 +109,8 @@
   <h1>¡Únete a la carrera!</h1>
   <div id="qr"></div>
   <div>Escanea o entra en<br><span id="url"></span></div>
+  <div>Código de sala<br><span id="roomCode"></span></div>
+  <button id="logout" type="button">Cerrar sesión</button>
   <p class="hint">Esquiva con ▲ ▼ ◀ ▶ · doble ▶ = nitro</p>
 </div>
 
@@ -124,23 +136,180 @@
   </div>
 </div>
 
-<div id="nokey" hidden><div>
-  <h1>Falta la clave de maestra</h1>
-  <p>Abre el enlace <b>“Pantalla de la maestra”</b> que aparece en la terminal donde corriste <code>node server.js</code>. Termina en <code>/host?key=…</code></p>
+<div id="login" hidden>
+  <form class="card" id="loginForm">
+    <h1>Carrera de Patos</h1>
+    <p class="hint">Inicia sesión para abrir una sala.</p>
+    <label for="email">Correo</label>
+    <input id="email" type="email" autocomplete="username" required>
+    <label for="password">Contraseña</label>
+    <input id="password" type="password" autocomplete="current-password" required>
+    <button class="btn main" id="loginBtn">Entrar</button>
+    <p class="err" id="loginErr" hidden></p>
+  </form>
+</div>
+<div id="setup" hidden><div>
+  <h1>Falta conectar Firebase</h1>
+  <p>Llena <code>public/firebase-config.js</code> con los datos de tu proyecto de Firebase. Los pasos están en el README.</p>
 </div></div>
 
-<script>
+<script type="module">
+import { configured, auth, onAuthStateChanged, signInWithEmailAndPassword, signOut, ref, db, get, set, update, remove, onValue,
+  newRoomCode, room } from './net.js';
 const $ = s => document.querySelector(s);
-const key = new URLSearchParams(location.search).get('key');
 let meta = null, phase = null, countdown = 0, elapsed = 0, qrFor = '', camX = null, crocVis = 1;
 const live = new Map();
 const secs = ms => (ms / 1000).toFixed(2) + ' s';
 const clock = ms => { const s = Math.floor(ms / 1000); return `${String(s / 60 | 0).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; };
-const host = (a, body) => fetch(`/host/${a}?key=${encodeURIComponent(key)}`, { method: 'POST', body: JSON.stringify(body || {}) })
-  .then(r => { if (r.status === 403) $('#nokey').hidden = false; });
+const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
 
-if (!key) $('#nokey').hidden = false;
-else new EventSource('/events').onmessage = e => onMsg(JSON.parse(e.data));
+// ---------- inicio de sesión y sala ----------
+// Solo una cuenta registrada en /admins de la base de datos puede abrir salas (lo exigen las reglas de Firebase).
+let code = null, unsubs = [];
+if (!configured) $('#setup').hidden = false;
+else onAuthStateChanged(auth, async user => {
+  unsubs.forEach(u => u()); unsubs = []; stopEngine();
+  if (!user || user.isAnonymous) { $('#login').hidden = false; return; }
+  const isAdmin = (await get(ref(db, `admins/${user.uid}`)).catch(() => null))?.val() === true;
+  if (!isAdmin) {
+    $('#login').hidden = false;
+    loginError(`Esta cuenta no tiene permiso para abrir salas. Agrega su UID a /admins en Firebase: ${user.uid}`);
+    return;
+  }
+  $('#login').hidden = true;
+  await openRoom(user.uid);
+});
+
+function loginError(msg) { const e = $('#loginErr'); e.textContent = msg; e.hidden = !msg; }
+$('#loginForm').onsubmit = async e => {
+  e.preventDefault(); loginError(''); $('#loginBtn').disabled = true;
+  try { await signInWithEmailAndPassword(auth, $('#email').value.trim(), $('#password').value); }
+  catch (x) { loginError(/invalid-credential|wrong-password|user-not-found|invalid-email/.test(x.code) ? 'Correo o contraseña incorrectos.' : 'No se pudo iniciar sesión. Revisa tu conexión.'); }
+  finally { $('#loginBtn').disabled = false; }
+};
+$('#logout').onclick = () => signOut(auth);
+
+// Reusa la sala de esta computadora si sigue siendo tuya; si no, crea una con código nuevo.
+async function openRoom(uid) {
+  code = store.get('duckRoom');
+  const owner = code && (await get(room(code, 'owner')).catch(() => null))?.val();
+  if (owner !== uid) {
+    code = null;
+    for (let i = 0; i < 8 && !code; i++) {
+      const c = newRoomCode();
+      try { await set(room(c), { owner: uid, createdAt: Date.now() }); code = c; } catch {} // ocupado por otra maestra
+    }
+    if (!code) { $('#login').hidden = false; return loginError('No se pudo crear la sala. Intenta de nuevo.'); }
+    store.set('duckRoom', code);
+  }
+  $('#roomCode').textContent = code;
+  startEngine();
+}
+
+// ---------- la partida: la física corre aquí y se comparte por Firebase ----------
+let gPhase = 'lobby', countdownEnd = 0, raceStart = 0, finishOrder = 0, obstacles = [], nextPid = 1, pondH = pondHeight(0);
+const players = new Map(); // uid -> pato (el pid corto es lo que viaja en cada actualización)
+let tickTimer = null, sendTimer = null;
+
+function startEngine() {
+  gPhase = 'lobby'; obstacles = []; players.clear(); live.clear(); meta = null;
+  unsubs.push(onValue(room(code, 'players'), snap => syncPlayers(snap.val() || {})));
+  unsubs.push(onValue(room(code, 'inputs'), snap => syncInputs(snap.val() || {})));
+  tickTimer = setInterval(tick, 1000 / T.tickHz);
+  sendTimer = setInterval(() => { if (gPhase === 'countdown' || gPhase === 'race') broadcast(snapshot()); }, 1000 / T.sendHz);
+  broadcast(metaMsg());
+}
+function stopEngine() { clearInterval(tickTimer); clearInterval(sendTimer); }
+
+const KEEP = ['uid', 'pid', 'name', 'duck', 'icon', 'online', 'lastN', 'dx', 'dy'];
+function resetDuck(p) { const keep = Object.fromEntries(KEEP.map(k => [k, p[k]])); return Object.assign(fresh(p), keep); }
+
+function syncPlayers(data) {
+  let changed = false;
+  for (const uid of [...players.keys()]) if (!data[uid]) { players.delete(uid); changed = true; }
+  for (const [uid, d] of Object.entries(data)) {
+    let p = players.get(uid);
+    if (!p) {
+      if (players.size >= MAX_PLAYERS) continue;
+      p = fresh({ uid, pid: nextPid++, lastN: null });
+      players.set(uid, p); changed = true;
+      if (gPhase !== 'lobby') p.y = T.R + Math.random() * (pondH - 2 * T.R) | 0; // llegó tarde: sale desde atrás
+    }
+    const name = String(d.name || '').slice(0, 16), duck = Math.max(0, Math.min(DUCKS.length - 1, d.duck | 0)), icon = Math.max(0, Math.min(ICONS.length - 1, d.icon | 0));
+    if (p.name !== name || p.duck !== duck || p.icon !== icon || p.online !== !!d.online) changed = true;
+    Object.assign(p, { name, duck, icon, online: !!d.online });
+  }
+  if (changed) { if (gPhase === 'lobby') lineUp(); broadcast(metaMsg()); }
+}
+
+function syncInputs(data) {
+  const now = Date.now();
+  for (const [uid, d] of Object.entries(data)) {
+    const p = players.get(uid); if (!p) continue;
+    p.dx = Math.sign(+d.dx || 0); p.dy = Math.sign(+d.dy || 0);
+    const n = +d.n || 0;
+    // doble ▶ cambia "n"; solo cuenta si la barra ya cargó
+    if (p.lastN != null && n !== p.lastN && gPhase === 'race' && p.finish == null && now >= p.nitroReady) {
+      p.nitroUntil = now + T.nitroMs; p.nitroReady = now + T.nitroMs + T.nitroCooldownMs;
+    }
+    p.lastN = n;
+  }
+}
+
+// Formar a todos en la línea de salida, repartidos a lo alto del estanque.
+function lineUp() {
+  const list = [...players.values()];
+  pondH = pondHeight(list.length);
+  list.forEach((p, i) => { resetDuck(p); p.y = Math.round((i + 0.5) * pondH / list.length); });
+}
+
+function tick() {
+  const now = Date.now();
+  if (gPhase === 'countdown' && now >= countdownEnd) { gPhase = 'race'; raceStart = now; broadcast(metaMsg()); }
+  if (gPhase !== 'race') return;
+  for (const p of players.values()) {
+    if (p.finish != null) continue;
+    if (step(p, now, 1 / T.tickHz, obstacles, pondH)) { p.x = T.trackLen; p.finish = now - raceStart; p.place = ++finishOrder; }
+  }
+  // Gana el primero en cruzar la meta: ahí termina la carrera y los demás quedan por distancia.
+  if (finishOrder) { gPhase = 'done'; broadcast(metaMsg()); }
+}
+
+function metaMsg() {
+  return {
+    t: 'm', phase: gPhase, trackLen: T.trackLen, pondH, nitroTotal: T.nitroMs + T.nitroCooldownMs, obstacles,
+    joinUrl: new URL(`./?sala=${code}`, location.href).href, code,
+    roster: [...players.values()].map(p => ({ pid: p.pid, uid: p.uid, name: p.name, duck: p.duck, icon: p.icon, online: p.online, x: Math.round(p.x), y: Math.round(p.y), finish: p.finish ?? 0, place: p.place ?? 0 })),
+  };
+}
+
+function snapshot() {
+  const now = Date.now();
+  return {
+    t: 's', phase: gPhase, cd: gPhase === 'countdown' ? Math.ceil((countdownEnd - now) / 1000) : 0, el: gPhase === 'race' ? now - raceStart : 0,
+    p: [...players.values()].map(p => [p.pid, Math.round(p.x), Math.round(p.y), now < p.nitroUntil ? 1 : 0, now < p.stunUntil ? 1 : 0, Math.max(0, p.nitroReady - now)]),
+  };
+}
+
+// La pantalla de la maestra lo usa directo; a los alumnos les llega por Firebase.
+function broadcast(msg) {
+  onMsg(structuredClone(msg));
+  set(room(code, msg.t === 'm' ? 'meta' : 'state'), msg).catch(() => {});
+}
+
+function startRace() {
+  if (!players.size) return;
+  for (const [uid, p] of players) if (!p.online) { players.delete(uid); remove(room(code, `players/${uid}`)); }
+  lineUp();
+  obstacles = makeTrack(pondH); finishOrder = 0;
+  gPhase = 'countdown'; countdownEnd = Date.now() + 3000;
+  broadcast(metaMsg());
+}
+function endRace() { if (gPhase === 'race' || gPhase === 'countdown') { gPhase = 'done'; broadcast(metaMsg()); } }
+function toLobby() { gPhase = 'lobby'; obstacles = []; lineUp(); broadcast(metaMsg()); }
+// Sacar: se borra su pato y queda bloqueado en esta sala (las reglas ya no le dejan volver a escribir).
+function kick(uid) { update(room(code), { [`players/${uid}`]: null, [`inputs/${uid}`]: null, [`banned/${uid}`]: true }); }
+const host = (a, body) => ({ start: startRace, end: endRace, lobby: toLobby, kick: () => kick(body.uid) })[a]();
 
 function onMsg(m) {
   if (m.t === 'm') {
@@ -183,7 +352,7 @@ function renderPeople() {
     const li = document.createElement('li'); li.className = r.online ? '' : 'off';
     const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = `${ICONS[r.icon]} ${r.name}`;
     const b = document.createElement('button'); b.className = 'kick'; b.textContent = 'Sacar';
-    b.setAttribute('aria-label', `Sacar a ${r.name}`); b.onclick = () => host('kick', { pid: r.pid });
+    b.setAttribute('aria-label', `Sacar a ${r.name}`); b.onclick = () => host('kick', { uid: r.uid });
     li.append(duckThumb(r.duck, 40), nm, b); return li;
   }));
 }
@@ -235,7 +404,7 @@ $('#closePeople').onclick = () => { $('#people').hidden = true; };
 // El lago pintado (public/lago) queda fijo de fondo; la carrera corre sobre su franja de agua.
 // Medidas en píxeles de la imagen original: dónde empieza y termina el agua, y dónde están el cocodrilo y el letrero.
 const LAKE = { w: LAKE_W, h: LAKE_H, waterTop: LAKE_WATER[0], waterBottom: LAKE_WATER[1], croc: [1357, 365, 360, 109], banner: [198, 18, 466, 250] };
-const lakeImg = name => { const im = new Image(); im.src = `/lago/${name}?v=${ART_V}`; return im; };
+const lakeImg = name => { const im = new Image(); im.src = `lago/${name}?v=${ART_V}`; return im; };
 const LAKE_IMG = { bg: LAKE_BG, croc: lakeImg('cocodrilo.png'), banner: lakeImg('letrero.png') };
 const ready = im => im.complete && im.naturalWidth;
 
