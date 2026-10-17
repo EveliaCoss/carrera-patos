@@ -256,11 +256,16 @@ function syncInputs(data) {
   }
 }
 
-// Formar a todos en la línea de salida, repartidos a lo alto del estanque.
+// Formar a todos en la salida: columnas de 6 patos; la primera pegada a la línea y cada 6 más, otra columna detrás.
+const PER_COLUMN = 6, COLUMN_GAP = 70;
 function lineUp() {
-  const list = [...players.values()];
-  pondH = pondHeight(list.length);
-  list.forEach((p, i) => { resetDuck(p); p.y = Math.round((i + 0.5) * pondH / list.length); });
+  const list = [...players.values()], rows = Math.min(list.length, PER_COLUMN);
+  pondH = pondHeight(rows);
+  list.forEach((p, i) => {
+    resetDuck(p);
+    p.x = -40 - Math.floor(i / PER_COLUMN) * COLUMN_GAP;
+    p.y = Math.round((i % PER_COLUMN + 0.5) * pondH / rows);
+  });
 }
 
 function tick() {
