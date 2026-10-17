@@ -1,7 +1,7 @@
 # Carrera de Patos
 
 Carrera de obstáculos en vivo para la clase. Los alumnos entran desde su celular o laptop con el código de
-la sala (o escaneando el QR), eligen uno de 35 patitos de hule disfrazados, un ícono y su nombre, y nadan
+la sala (o escaneando el QR), eligen uno de 95 patitos de hule disfrazados (clásicos, Halloween y Día de Muertos), un ícono y su nombre, y nadan
 por el lago esquivando obstáculos. Gana quien llega primero a la meta.
 
 - **Alumnos:** `https://eveliacoss.github.io/carrera-patos/`
@@ -30,7 +30,7 @@ inapropiado); queda bloqueado en esa sala.
 | Quién | Qué puede hacer |
 |---|---|
 | Tu cuenta (registrada en `/admins`) | Crear salas, arrancar y terminar carreras, sacar patos. Solo en salas que creó ella. |
-| Alumno (acceso anónimo) | Leer la sala, crear o cambiar **su** patito (nombre de 1–16 letras, pato 0–34, ícono 0–17) y mandar **sus** controles. |
+| Alumno (acceso anónimo) | Leer la sala, crear o cambiar **su** patito (nombre de 1–16 letras, pato 0–94, ícono 0–35) y mandar **sus** controles. |
 | Alumno que sacaste | Nada en esa sala: queda bloqueado. |
 | Cualquier otra persona | Nada sin iniciar sesión. Nadie puede tocar el patito de otro ni una sala ajena. |
 
@@ -75,8 +75,11 @@ atora 4 segundos en el mismo punto, se reacomoda 2 m adelante.
 - Velocidades, largo de la pista (500 m), nitro y aturdimiento: el objeto `T` en `public/game.js`.
 - Probar en tu computadora: `cd public && python3 -m http.server 8000` y abre `http://localhost:8000/host.html`.
 - Prueba de la física: `node test.js`.
-- Cambiar los patitos por otra hoja de 7 x 5 (fondo blanco):
-  `uv run --no-project --with pillow --with numpy python herramientas/recortar_patos.py hoja.png`.
+- Patitos: las hojas originales están en `herramientas/hojas/`. Para agregar más, pon la hoja nueva ahí, agrega sus
+  nombres al final de `NAMES` en `herramientas/recortar_patos.py` y corre:
+  `uv run --no-project --with pillow --with numpy python herramientas/recortar_patos.py herramientas/hojas/1-clasicos.png:7x5 herramientas/hojas/2-halloween.png:6x5 herramientas/hojas/3-dia-de-muertos.png:6x5 <nueva.png>:<columnas>x<filas>`.
+  Recorta cada pato, encuentra sus ojos para el parpadeo y actualiza `public/ducks.js`. Si cambia el total, sube
+  el límite de `duck` en `database.rules.json` y vuelve a pegar las reglas en Firebase.
 - Cambiar el fondo del lago de la sala:
   `uv run --no-project --with pillow --with numpy python herramientas/fondo_lago.py imagen.png`.
   El lago de la carrera es `public/lago/carrera.jpg`.

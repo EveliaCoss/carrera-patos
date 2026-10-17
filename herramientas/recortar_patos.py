@@ -1,45 +1,71 @@
-# Recorta la hoja de 35 patitos (7 x 5) en imágenes sin fondo, encuentra sus ojos para el parpadeo
-# y actualiza la tabla DUCKS de public/ducks.js.
+# Recorta las hojas de patitos en imágenes sin fondo, encuentra sus ojos para el parpadeo
+# y reescribe la tabla DUCKS de public/ducks.js (los patos se numeran en el orden de las hojas).
 #
-#   uv run --no-project --with pillow --with numpy python herramientas/recortar_patos.py <hoja.png> [ojos cerrados: 0,26]
+#   uv run --no-project --with pillow --with numpy python herramientas/recortar_patos.py \
+#       herramientas/hojas/1-clasicos.png:7x5 herramientas/hojas/2-halloween.png:6x5 herramientas/hojas/3-dia-de-muertos.png:6x5
 #
-# La hoja debe tener el mismo acomodo que la original: fondo blanco, 7 columnas y 5 filas.
+# Cada hoja: fondo blanco, patos en rejilla (columnas x filas). Para agregar patos, agrega una hoja al final y
+# sus nombres al final de NAMES. Si cambias el total, revisa el límite de "duck" en database.rules.json.
 import json, re, sys
 from collections import deque
 import numpy as np
 from PIL import Image, ImageFilter, ImageDraw
 
-sheet = sys.argv[1]
-CLOSED = {int(n) for n in sys.argv[2].split(',')} if len(sys.argv) > 2 and sys.argv[2] else set()
+SHEETS = [(a.rsplit(':', 1)[0], *map(int, a.rsplit(':', 1)[1].split('x'))) for a in sys.argv[1:]]
+CLOSED = set()  # índices de patos dibujados con los ojos ya cerrados (no parpadean)
+# Ojos que no se pueden encontrar solos (ojos negros sobre una cara negra): [x, y, rx, ry, color de la cara].
+EYE_FIX = {
+    88: [[0.586, 0.454, 0.0611, 0.0762, '#3d3842'], [0.795, 0.397, 0.025, 0.0596, '#3d3842']],  # Charro Morado
+    33: [[0.5257, 0.494, 0.0625, 0.0528, '#fce6b9'], [0.822, 0.445, 0.045, 0.05, '#fce6b9']],  # Samurái (el casco negro confunde)
+}
 ROOT = __file__.rsplit('/herramientas/', 1)[0]
 out_dir = f'{ROOT}/public/ducks'
 TOL, PLATE_TOL = 3, 4
 NAMES = ['Marinero', 'Astronauta', 'Vaquero', 'Detective', 'Chef', 'Doctor', 'Enfermera', 'Mago', 'Bruja', 'Artista',
          'Músico', 'Gamer', 'Graduado', 'Científico', 'Girasol', 'Hawaiano', 'Playa', 'Buzo', 'Explorador', 'Lluvia',
          'Invierno', 'Fresa', 'Rana', 'Panda', 'Gatito', 'Dino', 'Unicornio', 'Abeja', 'Cupcake', 'Dona', 'Elegante',
-         'Princesa', 'Pirata', 'Samurái', 'Ángel']
-# La rejilla se toma de la imagen: columnas/filas separadas por franjas de puro fondo.
-def bands(profile, n):
-    gaps = [i for i in range(1, len(profile)) if profile[i] != profile[i - 1]]
-    pairs = list(zip(gaps[1::2], gaps[2::2]))  # (fin de un pato, inicio del siguiente)
-    pairs = sorted(pairs, key=lambda p: p[1] - p[0], reverse=True)[:n - 1]
-    return [0] + sorted((a + b) // 2 for a, b in pairs) + [len(profile)]
+         'Princesa', 'Pirata', 'Samurái', 'Ángel',
+         # Halloween
+         'Calabaza', 'Bruja Naranja', 'Fantasma', 'Vampiro', 'Esqueleto', 'Diablito',
+         'Gato Negro', 'Bruja Escoba', 'Momia', 'Frankenstein', 'Murciélago Calabaza', 'La Parca',
+         'Calavera Flores', 'Bruja Telaraña', 'Murciélago', 'Pirata Fantasma', 'Calabazota', 'Hechicero',
+         'Araña', 'Bruja Verde', 'Gato Murciélago', 'Dulcecito', 'Fantasma Azul', 'Zombi',
+         'Calabacita', 'Bruja Voladora', 'Fantasma Cosido', 'Espantapájaros', 'Esqueleto Flores', 'Bruja Calabazas',
+         # Día de Muertos
+         'Catrina Flores', 'Catrín Esqueleto', 'Catrina Rosa', 'Mariachi', 'Catrina Velo', 'Catrín Calavera',
+         'Catrina Morada', 'Catrina Encaje', 'Mariachi Rojo', 'Catrina Azul', 'Mariachi Guitarra', 'Catrina Blanca',
+         'Catrina Rebozo', 'Charro Vela', 'Catrina Fiesta', 'Calaverita', 'Charro Guitarra', 'Catrina Noche',
+         'Catrina Vela', 'Catrín Elegante', 'Catrina Lila', 'Charro', 'Catrina Sombrero', 'Charro Morado',
+         'Catrina Talavera', 'Charrito', 'Catrina Mantilla', 'Catrín Sombrero', 'Catrina Velita', 'Charrito Sarape']
+# La rejilla se toma de la imagen: cerca de cada división esperada (hoja repartida en partes iguales) se corta
+# por la columna/fila con menos tinta, así funciona aunque dos patos casi se toquen.
+def bands(ink_count, n):
+    L = len(ink_count); cuts = [0]
+    for k in range(1, n):
+        c, win = k * L // n, L // (n * 4)
+        lo, hi = max(1, c - win), min(L - 1, c + win)
+        cuts.append(lo + int(np.argmin(ink_count[lo:hi])))
+    return cuts + [L]
 
 def is_bg(px):
     mn, mx = px.min(-1), px.max(-1)
     return (mn > 196) & (mx - mn < 20)  # fondo blanco + platito gris
 
-im = np.asarray(Image.open(sheet).convert('RGB')).astype(int)
-ink = im.min(-1) < 215
-COLS, ROWS = bands(ink.any(0), 7), bands(ink.any(1), 5)
-print('rejilla', COLS, ROWS)
+def is_page(px):
+    mn, mx = px.min(-1), px.max(-1)
+    return (mn >= 249) & (mx - mn <= 4)  # solo el blanco puro de la hoja (los fantasmas son un poco más grises o cálidos)
 
 sprites = []
-for r in range(5):
-    for ci in range(7):
+for sheet, ncols, nrows in SHEETS:
+  im = np.asarray(Image.open(sheet).convert('RGB')).astype(int)
+  ink = ~is_page(im)  # todo lo que no es hoja, platitos incluidos: así el corte cae en el blanco entre patos
+  COLS, ROWS = bands(ink.sum(0), ncols), bands(ink.sum(1), nrows)
+  print(sheet, 'rejilla', COLS, ROWS)
+  for r in range(nrows):
+    for ci in range(ncols):
         cell = im[ROWS[r]:ROWS[r + 1], COLS[ci]:COLS[ci + 1]]
         h, w, _ = cell.shape
-        cand = is_bg(cell)
+        cand = is_page(cell)
         bg = np.zeros((h, w), bool)
         q = deque()
         for y in range(h):
@@ -57,6 +83,7 @@ for r in range(5):
                     bg[ny, nx] = True; q.append((ny, nx))
         # Second pass: the plate under each duck. Seed from plate-coloured pixels touching the page in the
         # lower part of the cell and grow across smooth plate shading only.
+        cand = is_bg(cell) & (cell[..., 2] - cell[..., 0] >= 6)  # el platito es azulado; un fantasma blanco no
         lower = np.zeros((h, w), bool); lower[int(h * 0.55):] = True
         near = np.zeros((h, w), bool); near[1:] |= bg[:-1]; near[:-1] |= bg[1:]; near[:, 1:] |= bg[:, :-1]; near[:, :-1] |= bg[:, 1:]
         for y, x in zip(*np.nonzero(cand & lower & near & ~bg)):
@@ -71,13 +98,13 @@ for r in range(5):
         rgba = Image.fromarray(cell.astype(np.uint8)).convert('RGBA'); rgba.putalpha(alpha)
         box = rgba.getbbox(); rgba = rgba.crop(box)
         rgba.thumbnail((180, 180), Image.LANCZOS)
-        n = r * 7 + ci
+        n = len(sprites)
         rgba.save(f'{out_dir}/{n:02d}.png', optimize=True)
         sprites.append(rgba)
 
 
 result = []
-for n in range(35):
+for n in range(len(sprites)):
     im = sprites[n]; a = np.asarray(im).astype(int)
     h, w = a.shape[:2]
     dark = (a[..., :3].max(-1) < 75) & (a[..., 3] > 200)
@@ -95,11 +122,12 @@ for n in range(35):
         bh, bw = np.ptp(ys) + 1, np.ptp(xs) + 1
         fill = len(pts) / (np.pi / 4 * bh * bw)
         # eyes: small, a bit taller than wide, solid, in the face band
-        if 15 <= len(pts) <= 300 and 0.75 <= bh / bw <= 2.3 and fill > 0.5 and 0.2 * h < ys.mean() < 0.68 * h and xs.mean() > 0.36 * w:
-            # skin colour: median of opaque, bright pixels in a ring just outside the eye
+        if 15 <= len(pts) <= 600 and 0.75 <= bh / bw <= 3.0 and fill > 0.5 and 0.2 * h < ys.mean() < 0.68 * h and xs.mean() > 0.36 * w:
+            # skin colour: median of the opaque face pixels in a ring just outside the eye
+            # (any hue, so purple/red/blue faces work; skips the eye itself and white sparkles)
             y1, y2, x1, x2 = max(0, ys.min() - 5), min(h, ys.max() + 6), max(0, xs.min() - 5), min(w, xs.max() + 6)
             ring = a[y1:y2, x1:x2].reshape(-1, 4)
-            ring = ring[(ring[:, 3] > 200) & (ring[:, :3].min(-1) > 150)]
+            ring = ring[(ring[:, 3] > 200) & (ring[:, :3].max(-1) > 100) & (ring[:, :3].min(-1) < 240)]
             skin = np.median(ring[:, :3], 0).astype(int).tolist() if len(ring) else [255, 236, 170]
             eyes.append({'n': len(pts), 'x': round(xs.mean() / w, 4), 'y': round(ys.mean() / h, 4), 'rx': round((bw / 2 + 1.5) / w, 4), 'ry': round((bh / 2 + 1.5) / h, 4), 'skin': '#%02x%02x%02x' % tuple(skin)})
     # More than two blobs: keep the best pair (same height, sensible spacing, similar size).
@@ -114,10 +142,12 @@ for n in range(35):
                 if best is None or score < best[0]: best = (score, [e, f])
         eyes = best[1] if best else eyes[:1]
     if n in CLOSED: eyes = []  # drawn with closed eyes already
+    if n in EYE_FIX: eyes = [dict(zip(['x', 'y', 'rx', 'ry', 'skin'], e)) for e in EYE_FIX[n]]
     for e in eyes: e.pop('n', None)
     result.append({'w': w, 'h': h, 'eyes': eyes})
 
 rows = []
+assert len(NAMES) >= len(result), f'faltan nombres: hay {len(result)} patos y {len(NAMES)} nombres'
 for name, d in zip(NAMES, result):
     eyes = ', '.join(f"[{e['x']}, {e['y']}, {e['rx']}, {e['ry']}, '{e['skin']}']" for e in d['eyes'])
     rows.append(f"  ['{name}', {d['w']}, {d['h']}, [{eyes}]],")
