@@ -256,7 +256,8 @@ function updateHud() {
     const ahead = meta.roster.filter(r => r.pid !== myPid && (r.place || (live.get(r.pid)?.tx ?? 0) > (live.get(myPid)?.tx ?? 0))).length;
     if (me.place) setOverlay(`¡Llegaste #${me.place}!<small>${secs(me.finish)}</small>`);
     else if (phase === 'done') {
-      const pos = 1 + meta.roster.filter(r => r.pid !== myPid && (r.place || (!me.place && (live.get(r.pid)?.tx ?? r.x) > (live.get(myPid)?.tx ?? me.x)))).length;
+      const res = Object.values(meta.results || {}), mine = res.findIndex(r => r.uid === uid);
+      const pos = mine >= 0 ? mine + 1 : 1 + meta.roster.filter(r => r.pid !== myPid && (r.place || (!me.place && (live.get(r.pid)?.tx ?? r.x) > (live.get(myPid)?.tx ?? me.x)))).length;
       setOverlay(`Quedaste #${pos}<small>${pos <= 3 ? '¡Estás en el podio! 🏆' : 'Mira el podio en la pantalla'}</small>`);
     }
     else setOverlay('');

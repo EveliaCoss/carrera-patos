@@ -209,7 +209,7 @@ async function openRoom(uid) {
 // ---------- la partida: la física corre aquí y se comparte por Firebase ----------
 let gPhase = 'lobby', countdownEnd = 0, raceStart = 0, finishOrder = 0, obstacles = [], nextPid = 1, pondH = pondHeight(0);
 const players = new Map(); // uid -> pato (el pid corto es lo que viaja en cada actualización)
-let tickTimer = null, sendTimer = null;
+let tickTimer = null, sendTimer = null, finalResults = null; // resultados congelados al terminar la carrera
 
 function startEngine() {
   gPhase = 'lobby'; obstacles = []; players.clear(); live.clear(); meta = null;
@@ -277,13 +277,13 @@ function tick() {
     if (step(p, now, 1 / T.tickHz, obstacles, pondH)) { p.x = T.trackLen; p.finish = now - raceStart; p.place = ++finishOrder; }
   }
   // Gana el primero en cruzar la meta: ahí termina la carrera y los demás quedan por distancia.
-  if (finishOrder) { gPhase = 'done'; broadcast(metaMsg()); }
+  if (finishOrder) finishRace();
 }
 
 function metaMsg() {
   return {
     t: 'm', phase: gPhase, trackLen: T.trackLen, pondH, nitroTotal: T.nitroMs + T.nitroCooldownMs, obstacles,
-    joinUrl: new URL(`./?sala=${code}`, location.href).href, code,
+    joinUrl: new URL(`./?sala=${code}`, location.href).href, code, results: gPhase === 'done' ? finalResults : null,
     roster: [...players.values()].map(p => ({ pid: p.pid, uid: p.uid, name: p.name, duck: p.duck, icon: p.icon, online: p.online, x: Math.round(p.x), y: Math.round(p.y), finish: p.finish ?? 0, place: p.place ?? 0 })),
   };
 }
@@ -306,12 +306,21 @@ function startRace() {
   if (!players.size) return;
   for (const [uid, p] of players) if (!p.online) { players.delete(uid); remove(room(code, `players/${uid}`)); }
   lineUp();
-  obstacles = makeTrack(pondH); finishOrder = 0;
+  obstacles = makeTrack(pondH); finishOrder = 0; finalResults = null;
   gPhase = 'countdown'; countdownEnd = Date.now() + 3000;
   broadcast(metaMsg());
 }
-function endRace() { if (gPhase === 'race' || gPhase === 'countdown') { gPhase = 'done'; broadcast(metaMsg()); } }
-function toLobby() { gPhase = 'lobby'; obstacles = []; lineUp(); broadcast(metaMsg()); }
+function endRace() { if (gPhase === 'race' || gPhase === 'countdown') finishRace(); }
+// Foto de las posiciones al terminar: aunque alguien se salga después, el podio no cambia
+// hasta que la maestra pulse "Correr otra vez" o "Volver a la sala".
+function finishRace() {
+  gPhase = 'done';
+  finalResults = [...players.values()]
+    .sort((a, b) => (a.place || 1e9) - (b.place || 1e9) || b.x - a.x)
+    .map(p => ({ pid: p.pid, uid: p.uid, name: p.name, duck: p.duck, icon: p.icon, x: Math.round(p.x), finish: p.finish ?? 0, place: p.place ?? 0 }));
+  broadcast(metaMsg());
+}
+function toLobby() { gPhase = 'lobby'; obstacles = []; finalResults = null; lineUp(); broadcast(metaMsg()); }
 // Sacar: se borra su pato y queda bloqueado en esta sala (las reglas ya no le dejan volver a escribir).
 function kick(uid) { update(room(code), { [`players/${uid}`]: null, [`inputs/${uid}`]: null, [`banned/${uid}`]: true }); }
 const host = (a, body) => ({ start: startRace, end: endRace, lobby: toLobby, kick: () => kick(body.uid) })[a]();
@@ -381,7 +390,7 @@ function renderRace() {
 }
 
 function renderResults() {
-  const st = standings(), colors = ['var(--gold)', 'var(--silver)', 'var(--bronze)'], heights = [150, 105, 80];
+  const st = meta.results || standings(), colors = ['var(--gold)', 'var(--silver)', 'var(--bronze)'], heights = [150, 105, 80];
   $('#podium').replaceChildren(...[1, 0, 2].filter(i => st[i]).map(i => {
     const r = st[i], d = document.createElement('div'); d.className = 'step';
     const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = `${ICONS[r.icon]} ${r.name}`;
