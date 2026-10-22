@@ -110,6 +110,7 @@
   <div id="qr"></div>
   <div>Escanea o entra en<br><span id="url"></span></div>
   <div>Código de sala<br><span id="roomCode"></span></div>
+  <button class="btn gray" id="newRoom" type="button">Nueva sala (código nuevo)</button>
   <button id="logout" type="button">Cerrar sesión</button>
   <p class="hint">Esquiva con ▲ ▼ ◀ ▶ · doble ▶ = nitro</p>
 </div>
@@ -188,6 +189,19 @@ $('#loginForm').onsubmit = async e => {
   finally { $('#loginBtn').disabled = false; }
 };
 $('#logout').onclick = () => signOut(auth);
+
+// Nueva sala: código nuevo y sin los alumnos de antes. La sala anterior se borra; quien siguiera dentro
+// ve "La maestra te sacó de la carrera" y puede entrar con el código nuevo.
+$('#newRoom').onclick = async () => {
+  if (!confirm('¿Crear una sala nueva? Cambia el código y salen todos los alumnos de la sala actual.')) return;
+  const btn = $('#newRoom'); btn.disabled = true;
+  unsubs.forEach(u => u()); unsubs = []; stopEngine();
+  const old = code; store.set('duckRoom', '');
+  try {
+    await openRoom(auth.currentUser.uid);
+    if (old && old !== code) await remove(room(old)).catch(() => {});
+  } finally { btn.disabled = false; }
+};
 
 // Reusa la sala de esta computadora si sigue siendo tuya; si no, crea una con código nuevo.
 async function openRoom(uid) {
