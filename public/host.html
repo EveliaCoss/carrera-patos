@@ -164,7 +164,8 @@ let meta = null, phase = null, countdown = 0, elapsed = 0, qrFor = '', camX = nu
 const live = new Map();
 const secs = ms => (ms / 1000).toFixed(2) + ' s';
 const clock = ms => { const s = Math.floor(ms / 1000); return `${String(s / 60 | 0).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; };
-const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+const keep = area => ({ get: k => { try { return area().getItem(k); } catch { return null; } }, set: (k, v) => { try { area().setItem(k, v); } catch {} } });
+const store = keep(() => localStorage), tab = keep(() => sessionStorage);
 
 // ---------- inicio de sesión y sala ----------
 // Solo una cuenta registrada en /admins de la base de datos puede abrir salas (lo exigen las reglas de Firebase).
@@ -198,25 +199,25 @@ $('#newRoom').onclick = async () => {
   if (!confirm('¿Crear una sala nueva? Cambia el código y salen todos los alumnos de la sala actual.')) return;
   const btn = $('#newRoom'); btn.disabled = true;
   unsubs.forEach(u => u()); unsubs = []; stopEngine();
-  const old = code; store.set('duckRoom', '');
-  try {
-    await openRoom(auth.currentUser.uid);
-    if (old && old !== code) await remove(room(old)).catch(() => {});
-  } finally { btn.disabled = false; }
+  tab.set('duckRoom', '');
+  try { await openRoom(auth.currentUser.uid); } finally { btn.disabled = false; }
 };
 
-// Reusa la sala de esta computadora si sigue siendo tuya; si no, crea una con código nuevo.
+// Si solo recargaste esta pestaña, sigue la misma sala. Al abrir la página de nuevo se crea una sala con código
+// nuevo y se borra la anterior, para que no aparezcan los alumnos de otra clase.
 async function openRoom(uid) {
-  code = store.get('duckRoom');
+  code = tab.get('duckRoom');
   const owner = code && (await get(room(code, 'owner')).catch(() => null))?.val();
   if (owner !== uid) {
+    const old = store.get('duckRoom');
     code = null;
     for (let i = 0; i < 8 && !code; i++) {
       const c = newRoomCode();
       try { await set(room(c), { owner: uid, createdAt: Date.now() }); code = c; } catch {} // ocupado por otra maestra
     }
     if (!code) { $('#login').hidden = false; return loginError('No se pudo crear la sala. Intenta de nuevo.'); }
-    store.set('duckRoom', code);
+    store.set('duckRoom', code); tab.set('duckRoom', code);
+    if (old && old !== code) remove(room(old)).catch(() => {});
   }
   $('#roomCode').textContent = code;
   startEngine();

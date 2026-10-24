@@ -9,7 +9,8 @@ por el lago esquivando obstáculos. Gana quien llega primero a la meta.
 
 ## Cómo usarla
 
-1. Abre la página de la maestra en el proyector e inicia sesión. Aparece la sala con su **código** y su **QR**.
+1. Abre la página de la maestra en el proyector e inicia sesión. Aparece una sala nueva con su **código** y su **QR**
+   (cada vez que abres la página es una sala nueva y vacía; si solo recargas la pestaña, sigue la misma).
 2. Los alumnos escanean el QR, o entran a la página de alumnos y escriben el código. Eligen pato, ícono y nombre.
 3. Pulsa **¡Arrancar carrera!**. Al terminar puedes lanzar **Correr otra vez**, que genera una pista nueva con los mismos patos.
 
