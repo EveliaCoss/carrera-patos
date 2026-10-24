@@ -14,4 +14,4 @@ export const firebaseConfig = {
 };
 
 // Clave de sitio de reCAPTCHA v3 para App Check (también es pública). Los pasos están en el README.
-export const recaptchaSiteKey = 'PEGA_AQUI_LA_CLAVE_DE_SITIO';
+export const recaptchaSiteKey = '6LcJ1v4tAAAAAJRU-6a6yctA7Ut9V28ldTF0qXm0';
