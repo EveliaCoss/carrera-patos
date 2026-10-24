@@ -88,6 +88,7 @@
   #logout { background: none; border: 0; color: var(--muted); text-decoration: underline; font-size: .85rem; }
 
   @media (max-width: 760px) { #qrCard { position: fixed; top: auto; bottom: 16px; right: 16px; transform: none; width: 220px; } }
+  .grecaptcha-badge { visibility: hidden; } /* el sello tapaba los controles: el aviso de Google va como texto */
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="ducks.js"></script>
@@ -147,6 +148,7 @@
     <input id="password" type="password" autocomplete="current-password" required>
     <button class="btn main" id="loginBtn">Entrar</button>
     <p class="err" id="loginErr" hidden></p>
+    <p class="hint" style="font-size:.8rem">Protegido por reCAPTCHA de Google: <a href="https://policies.google.com/privacy">Privacidad</a> · <a href="https://policies.google.com/terms">Términos</a></p>
   </form>
 </div>
 <div id="setup" hidden><div>

@@ -12,3 +12,6 @@ export const firebaseConfig = {
   messagingSenderId: '804559891825',
   appId: '1:804559891825:web:8dfe2791eeadbb73915ad0',
 };
+
+// Clave de sitio de reCAPTCHA v3 para App Check (también es pública). Los pasos están en el README.
+export const recaptchaSiteKey = 'PEGA_AQUI_LA_CLAVE_DE_SITIO';

@@ -65,6 +65,7 @@
   #bFwd { background: var(--duck); color: var(--ink); box-shadow: 0 4px 0 var(--duck-edge); }
   .nitro small.ready { color: #2B8A3E; font-weight: 700; }
   @media (prefers-reduced-motion: reduce) { #nitroBar.on { animation: none; } }
+  .grecaptcha-badge { visibility: hidden; } /* el sello tapaba los controles: el aviso de Google va como texto */
 </style>
 <script src="ducks.js"></script>
 </head>
@@ -100,6 +101,7 @@
     <button class="go" id="joinBtn">Entrar a la carrera</button>
     <p id="joinErr" class="err" hidden></p>
   </form>
+  <p class="sub" style="font-size:.8rem">Protegido por reCAPTCHA de Google: <a href="https://policies.google.com/privacy">Privacidad</a> · <a href="https://policies.google.com/terms">Términos</a></p>
 </main>
 
 <main id="game" hidden>

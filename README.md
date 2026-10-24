@@ -34,6 +34,9 @@ inapropiado); queda bloqueado en esa sala.
 | Alumno que sacaste | Nada en esa sala: queda bloqueado. |
 | Cualquier otra persona | Nada sin iniciar sesión. Nadie puede tocar el patito de otro ni una sala ajena. |
 
+Además, **App Check** (con reCAPTCHA v3, invisible para los alumnos) hace que Firebase solo atienda a esta página
+abierta en un navegador real: un bot que use los datos de `firebase-config.js` desde un script queda fuera.
+
 ## Configuración (una sola vez)
 
 ### 1. Firebase
@@ -57,6 +60,17 @@ inapropiado); queda bloqueado en esa sala.
    públicas las imágenes de los patos y del lago.
 2. **Settings → Pages → Source:** elige **GitHub Actions**.
 3. Sube los cambios a `main`. El flujo `.github/workflows/pages.yml` publica `public/` en un par de minutos.
+
+### 3. App Check (contra bots)
+
+1. En [google.com/recaptcha/admin/create](https://www.google.com/recaptcha/admin/create) crea una clave
+   **reCAPTCHA v3** con los dominios `eveliacoss.github.io` y `localhost`. Copia la **clave de sitio** y la
+   **clave secreta**.
+2. En Firebase, **App Check → Apps:** elige la app web, proveedor **reCAPTCHA**, pega la **clave secreta** y guarda.
+3. Pega la **clave de sitio** en `recaptchaSiteKey` de `public/firebase-config.js` y sube el cambio a `main`.
+4. Juega una carrera y revisa en **App Check → APIs** que las solicitudes salgan como *verificadas*. Solo entonces
+   pulsa **Aplicar** (Enforce) en **Realtime Database** y en **Authentication**. Si lo aplicas antes de publicar la
+   clave, nadie podrá entrar al juego.
 
 ## Controles del alumno
 
