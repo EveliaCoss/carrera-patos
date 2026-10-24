@@ -1,14 +1,14 @@
 // Conexión con Firebase, compartida por la pantalla de la maestra y la del alumno.
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import { getAuth, onAuthStateChanged, signInAnonymously, signInWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-import { initializeAppCheck, ReCaptchaV3Provider } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js';
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js';
 import { getDatabase, ref, get, set, update, remove, onValue, onDisconnect } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
 import { firebaseConfig, recaptchaSiteKey } from './firebase-config.js';
 
 export const configured = !String(firebaseConfig.apiKey).includes('PEGA_AQUI');
 const app = configured ? initializeApp(firebaseConfig) : null;
 // App Check: Firebase solo atiende a esta página abierta en un navegador real, no a scripts que usen la config.
-if (app && !recaptchaSiteKey.includes('PEGA_AQUI')) initializeAppCheck(app, { provider: new ReCaptchaV3Provider(recaptchaSiteKey), isTokenAutoRefreshEnabled: true });
+if (app && !recaptchaSiteKey.includes('PEGA_AQUI')) initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider(recaptchaSiteKey), isTokenAutoRefreshEnabled: true });
 export const auth = app && getAuth(app);
 export const db = app && getDatabase(app);
 export { onAuthStateChanged, signInAnonymously, signInWithEmailAndPassword, signOut, ref, get, set, update, remove, onValue, onDisconnect };

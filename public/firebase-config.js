@@ -13,5 +13,5 @@ export const firebaseConfig = {
   appId: '1:804559891825:web:8dfe2791eeadbb73915ad0',
 };
 
-// Clave de sitio de reCAPTCHA v3 para App Check (también es pública). Los pasos están en el README.
+// Clave de sitio de reCAPTCHA (Google Cloud Fraud Defense) para App Check (también es pública). Los pasos están en el README.
 export const recaptchaSiteKey = '6LcJ1v4tAAAAAJRU-6a6yctA7Ut9V28ldTF0qXm0';
